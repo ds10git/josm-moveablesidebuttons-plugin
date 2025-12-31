@@ -7,8 +7,10 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Dimension;
+import java.awt.FlowLayout;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.GridLayout;
 import java.awt.LayoutManager;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
@@ -46,14 +48,17 @@ public class MoveableButtonPanel extends JPanel {
 	private List<JPanel> buttonRows;
 	private HashMap<JPanel, List<String>> buttonText;
 	private ButtonsLayout layout;
-
+	private ComponentAdapter adapter;
+	private ToggleDialog d;
+	
 	public MoveableButtonPanel(ToggleDialog d) {
 		super(new BorderLayout());
 		id = getClass().getSimpleName() + "." + d.getClass().getCanonicalName();
+		this.d = d;
 		
 		if(d.isDialogInCollapsedView()) {
-		  Component c = d.getComponent(1);
-			c.addComponentListener(new ComponentAdapter() {
+			Component c = d.getComponent(1);
+			adapter = new ComponentAdapter() {
 				@Override
 				public synchronized void componentResized(ComponentEvent e) {
 					if(!d.isDialogInCollapsedView() && d.isDialogInDefaultView()) {
@@ -63,12 +68,77 @@ public class MoveableButtonPanel extends JPanel {
 						});
 
 						c.removeComponentListener(this);
+						adapter = null;
 					}
 				}
-			});
+			};
+			
+			c.addComponentListener(adapter);
 		} else {
 			apply(d);
 		}
+	}
+	
+	public synchronized void reset() {
+		if(adapter != null) {
+			d.getComponent(1).removeComponentListener(adapter);
+			adapter = null;
+		}
+		else {
+			Component data = getComponent(0);
+			JPanel buttonsParent = (JPanel)getComponent(1);
+			
+			remove(1);
+			remove(0);
+			
+			for(JPanel buttonRow : buttonRows) {
+				List<String> textList = buttonText.get(buttonRow);
+				List<SideButton> newList = new LinkedList<>();
+				
+				for(int i = buttonRow.getComponentCount() - 1; i >= 0; i--) {
+					SideButton button = ((ExtendedSideButton)buttonRow.getComponent(i)).b;
+					button.setText(textList.get(i));
+					
+					newList.add(0,button);
+					buttonRow.remove(i);
+				}
+				
+				buttonRow.setLayout(Config.getPref().getBoolean("dialog.align.left", false) ? new FlowLayout(FlowLayout.LEFT) : new GridLayout(1, newList.size()));
+				
+				for(SideButton b : newList) {
+					buttonRow.add(b);
+				}
+			}
+			
+  		MouseListener[] listeners = d.getComponent(0).getMouseListeners();
+  		
+  		for(int i = 0; i < listeners.length; i++) {
+  			if(listeners[i] instanceof PopupMenuLauncher) {
+  				JPopupMenu popup = ((PopupMenuLauncher) listeners[i]).getMenu();
+  				if(popup.getComponentCount() > 0 && popup.getComponent(0) instanceof JMenu) {
+  					JMenu menu = (JMenu) popup.getComponent(0);
+  					menu.remove(menu.getMenuComponentCount()-1);
+  					menu.remove(menu.getMenuComponentCount()-1);
+  					menu.remove(menu.getMenuComponentCount()-1);
+  				}
+  			}
+  		}
+			
+			d.remove(1);
+			d.add(data, BorderLayout.CENTER);
+			d.add(buttonsParent, BorderLayout.SOUTH);
+			d.doLayout();
+			buttonsParent = null;
+			buttonRows.clear();
+			buttonRows = null;
+			buttonText.clear();
+			buttonText = null;
+			layout.destroy();
+			layout = null;
+		}
+		
+		id = null;
+		d = null;
 	}
 	
 	public synchronized void apply(ToggleDialog d) {
@@ -227,6 +297,11 @@ public class MoveableButtonPanel extends JPanel {
 		private int height = 0;
 		private Orientation o;
 		private ToggleDialog d;
+		
+		private void destroy() {
+			o = null;
+			d = null;
+		}
 
 		public ButtonsLayout(ToggleDialog d, Orientation o) {
 			this.o = o;

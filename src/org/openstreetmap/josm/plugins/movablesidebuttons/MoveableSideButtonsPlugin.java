@@ -27,6 +27,7 @@ public class MoveableSideButtonsPlugin extends Plugin {
 	private static MoveableSideButtonsPlugin instance;
 	private final HashMap<ToggleDialog, MoveableButtonPanel> moveableMouseButtonsMap = new HashMap<>();
 	private final ContainerAdapter listener;
+	private final ContainerAdapter minSizePanelListener;
 
 	public MoveableSideButtonsPlugin(PluginInformation info) {
 		super(info);
@@ -36,6 +37,15 @@ public class MoveableSideButtonsPlugin extends Plugin {
 			public void componentAdded(ContainerEvent e) {
 				if(e.getChild() instanceof ToggleDialog) {
 					addToggleDialog((ToggleDialog) e.getChild());
+				}
+			}
+		};
+		minSizePanelListener = new ContainerAdapter() {
+			@Override
+			public void componentAdded(ContainerEvent e) {
+				if(Objects.equals("org.openstreetmap.josm.gui.dialogs.DialogsPanel.MinSizePanel",
+						e.getChild().getClass().getCanonicalName())) {
+					((JPanel) e.getChild()).addContainerListener(listener);
 				}
 			}
 		};
@@ -75,6 +85,34 @@ public class MoveableSideButtonsPlugin extends Plugin {
 	
 	@Override
 	public void mapFrameInitialized(MapFrame oldFrame, MapFrame newFrame) {
+	  moveableMouseButtonsMap.clear();
+	  
+	  if(oldFrame != null) {
+      for(int k = 0; k < oldFrame.getComponentCount(); k++) {
+        if(oldFrame.getComponent(k) instanceof JSplitPane) {
+          JSplitPane sp = (JSplitPane) oldFrame.getComponent(k);
+          for(int i = 0; i < sp.getComponentCount(); i++) {
+            if(sp.getComponent(i) instanceof DialogsPanel) {
+              DialogsPanel p = (DialogsPanel) sp.getComponent(i);
+
+              for(int j = 0; j < p.getComponentCount(); j++) {
+                if(p.getComponent(j) instanceof MultiSplitPane) {
+                  MultiSplitPane mp = (MultiSplitPane) p.getComponent(j);
+                  mp.removeContainerListener(minSizePanelListener);
+
+                  for(int i1 = 0; i1 < mp.getComponentCount(); i1++) {
+                    if(((JPanel) mp.getComponent(i1)).getComponentCount() > 0) {
+                      ((JPanel) mp.getComponent(i1)).removeContainerListener(listener);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+		
 		if(newFrame != null) {
 			for(int k = 0; k < newFrame.getComponentCount(); k++) {
 				if(newFrame.getComponent(k) instanceof JSplitPane) {
@@ -86,15 +124,7 @@ public class MoveableSideButtonsPlugin extends Plugin {
 							for(int j = 0; j < p.getComponentCount(); j++) {
 								if(p.getComponent(j) instanceof MultiSplitPane) {
 									MultiSplitPane mp = (MultiSplitPane) p.getComponent(j);
-									mp.addContainerListener(new ContainerAdapter() {
-										@Override
-										public void componentAdded(ContainerEvent e) {
-											if(Objects.equals("org.openstreetmap.josm.gui.dialogs.DialogsPanel.MinSizePanel",
-													e.getChild().getClass().getCanonicalName())) {
-												((JPanel) e.getChild()).addContainerListener(listener);
-											}
-										}
-									});
+									mp.addContainerListener(minSizePanelListener);
 
 									for(int i1 = 0; i1 < mp.getComponentCount(); i1++) {
 										if(((JPanel) mp.getComponent(i1)).getComponentCount() > 0) {
